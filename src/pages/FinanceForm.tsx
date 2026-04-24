@@ -74,48 +74,50 @@ export function FinanceForm() {
 
   return (
     <div>
-      <h2>{isEditing ? 'Editar Despesa' : 'Nova Despesa'}</h2>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      <div className="page-header">
+        <h2 style={{ margin: 0 }}>{isEditing ? 'Editar Despesa' : 'Nova Despesa'}</h2>
+      </div>
 
-      <div style={{ padding: '15px', backgroundColor: '#f9f9f9', border: '1px solid #ddd', maxWidth: '500px' }}>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          
+      {error && <div className="alert-error">{error}</div>}
+
+      <div className="card-form">
+        <form onSubmit={handleSubmit} className="form-group">
+
           <label>Descrição:</label>
-          <input 
-            type="text" 
-            value={descricao} 
-            onChange={(e) => setDescricao(e.target.value)} 
-            required 
-            style={{ padding: '8px' }}
+          <input
+            type="text"
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            required
+            placeholder="Ex: Manutenção de equipamento"
           />
 
           <label>Valor (R$):</label>
-          <input 
-            type="number" 
+          <input
+            type="number"
             step="0.01"
-            value={valor} 
-            onChange={(e) => setValor(e.target.value)} 
-            required 
-            style={{ padding: '8px' }}
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            required
+            placeholder="0,00"
           />
 
-          <label>Data Vencimento:</label>
-          <input 
-            type="date" 
-            value={dataVencimento} 
-            onChange={(e) => setDataVencimento(e.target.value)} 
-            required 
-            style={{ padding: '8px' }}
+          <label>Data de Vencimento:</label>
+          <input
+            type="date"
+            value={dataVencimento}
+            onChange={(e) => setDataVencimento(e.target.value)}
+            required
           />
 
-          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-            <button type="submit" disabled={submitting} style={{ padding: '8px 15px', flex: 1 }}>
+          <div className="form-actions">
+            <button type="submit" disabled={submitting} className="btn-primary">
               {submitting ? 'Salvando...' : (isEditing ? 'Atualizar' : 'Registrar')}
             </button>
-            <button 
-              type="button" 
-              onClick={() => navigate('/finance')} 
-              style={{ padding: '8px 15px', backgroundColor: '#ccc', flex: 1 }}
+            <button
+              type="button"
+              onClick={() => navigate('/finance')}
+              className="btn-secondary"
             >
               Cancelar
             </button>
