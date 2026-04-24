@@ -1,5 +1,5 @@
 import { FinanceRepository } from '../repositories/FinanceRepository';
-import { ContasPagar } from '../types/database';
+import { ContasPagar, ContasReceber } from '../types/database';
 
 const repository = new FinanceRepository();
 
@@ -29,4 +29,18 @@ export const payableService = {
   async delete(id: number): Promise<void> {
     await repository.deleteContaPagar(id);
   }
+};
+
+export const receivableService = {
+  async listAll(): Promise<ContasReceber[]> {
+    return await repository.listContasReceber();
+  },
+
+  async markAsPaid(id: number): Promise<void> {
+    await repository.updateContaReceberPago(id, true);
+  },
+
+  async markAsPending(id: number): Promise<void> {
+    await repository.updateContaReceberPago(id, false);
+  },
 };

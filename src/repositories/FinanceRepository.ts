@@ -60,7 +60,18 @@ export class FinanceRepository {
 
   async updateContaReceberPago(id: number, pago: boolean): Promise<void> {
     const db = await getDb();
+
+    // Atualiza contas_receber
     await db.execute('UPDATE contas_receber SET pago = $1 WHERE id = $2', [pago ? 1 : 0, id]);
+
+    // Busca o venda_id vinculado e sincroniza a venda
+    const rows = await db.select<{ venda_id: number }[]>(
+      'SELECT venda_id FROM contas_receber WHERE id = $1',
+      [id]
+    );
+    if (rows.length > 0 && rows[0].venda_id) {
+      await db.execute('UPDATE venda SET pago = $1 WHERE id = $2', [pago ? 1 : 0, rows[0].venda_id]);
+    }
   }
 
   async listContasReceberPendentes(): Promise<ContasReceber[]> {
