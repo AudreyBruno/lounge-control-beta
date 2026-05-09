@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Venda } from '../types/database';
 import { VendaRepository } from '../repositories/VendaRepository';
@@ -17,6 +17,8 @@ export function Sales() {
   const [vendas, setVendas] = useState<VendaWithCliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
 
   useEffect(() => {
     loadVendas();
@@ -48,6 +50,21 @@ export function Sales() {
     }
   };
 
+  const filtered = useMemo(() => {
+    return vendas.filter(v => {
+      const q = search.toLowerCase();
+      const matchSearch =
+        !q ||
+        v.cliente_nome.toLowerCase().includes(q) ||
+        String(v.id).includes(q);
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'paid' && v.pago) ||
+        (statusFilter === 'pending' && !v.pago);
+      return matchSearch && matchStatus;
+    });
+  }, [vendas, search, statusFilter]);
+
   if (loading && vendas.length === 0) return <p>Carregando vendas...</p>;
 
   return (
@@ -61,6 +78,33 @@ export function Sales() {
 
       {error && <div className="alert-error">{error}</div>}
 
+      {/* Filtros */}
+      <div className="filter-bar">
+        <div className="filter-search-wrap">
+          <span className="filter-search-icon">🔍</span>
+          <input
+            className="filter-search"
+            type="text"
+            placeholder="Buscar por cliente ou ID..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="filter-clear-btn" onClick={() => setSearch('')} title="Limpar busca">✕</button>
+          )}
+        </div>
+        <select
+          className="filter-select"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as any)}
+        >
+          <option value="all">Todos os status</option>
+          <option value="paid">Pago</option>
+          <option value="pending">Pendente</option>
+        </select>
+        <span className="filter-count">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
       <table className="data-table">
         <thead>
           <tr>
@@ -73,7 +117,7 @@ export function Sales() {
           </tr>
         </thead>
         <tbody>
-          {vendas.map(v => (
+          {filtered.map(v => (
             <tr key={v.id}>
               <td>{v.id}</td>
               <td>{new Date(v.data).toLocaleString('pt-BR')}</td>
@@ -87,9 +131,9 @@ export function Sales() {
               </td>
             </tr>
           ))}
-          {vendas.length === 0 && (
+          {filtered.length === 0 && (
             <tr className="empty-row">
-              <td colSpan={6}>Nenhuma venda registrada.</td>
+              <td colSpan={6}>Nenhuma venda encontrada.</td>
             </tr>
           )}
         </tbody>

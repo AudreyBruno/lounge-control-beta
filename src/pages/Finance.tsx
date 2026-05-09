@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { payableService, receivableService } from '../services/payableService';
 import { ContasPagar, ContasReceber } from '../types/database';
@@ -14,6 +14,13 @@ export function Finance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  // Filtros - Receber
+  const [searchReceber, setSearchReceber] = useState('');
+  const [statusReceber, setStatusReceber] = useState<'all' | 'paid' | 'pending'>('all');
+
+  // Filtros - Pagar
+  const [searchPagar, setSearchPagar] = useState('');
 
   useEffect(() => {
     loadAll();
@@ -64,6 +71,23 @@ export function Finance() {
   const totalReceber = receivables.filter(r => !r.pago).reduce((s, r) => s + r.valor, 0);
   const totalRecebido = receivables.filter(r => r.pago).reduce((s, r) => s + r.valor, 0);
   const totalPagar = payables.reduce((s, p) => s + p.valor, 0);
+
+  const filteredReceivables = useMemo(() => {
+    return receivables.filter(r => {
+      const matchSearch = !searchReceber || r.descricao.toLowerCase().includes(searchReceber.toLowerCase());
+      const matchStatus =
+        statusReceber === 'all' ||
+        (statusReceber === 'paid' && r.pago) ||
+        (statusReceber === 'pending' && !r.pago);
+      return matchSearch && matchStatus;
+    });
+  }, [receivables, searchReceber, statusReceber]);
+
+  const filteredPayables = useMemo(() => {
+    return payables.filter(p =>
+      !searchPagar || p.descricao.toLowerCase().includes(searchPagar.toLowerCase())
+    );
+  }, [payables, searchPagar]);
 
   if (loading && receivables.length === 0 && payables.length === 0) {
     return <p>Carregando financeiro...</p>;
@@ -152,100 +176,145 @@ export function Finance() {
 
       {/* Contas a Receber (Vendas) */}
       {activeTab === 'receber' && (
-        <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: '0 0 var(--radius-md) var(--radius-md)', borderTop: 'none' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Descrição</th>
-                <th>Valor</th>
-                <th>Vencimento</th>
-                <th>Status</th>
-                <th>Ação</th>
-              </tr>
-            </thead>
-            <tbody>
-              {receivables.map(r => (
-                <tr key={r.id}>
-                  <td>{r.id}</td>
-                  <td>{r.descricao}</td>
-                  <td>R$ {r.valor.toFixed(2)}</td>
-                  <td>{new Date(r.data_vencimento).toLocaleDateString('pt-BR')}</td>
-                  <td>
-                    {r.pago ? (
-                      <span className="status-active">✅ Recebido</span>
-                    ) : (
-                      <span className="status-pending">⏳ A Receber</span>
-                    )}
-                  </td>
-                  <td>
-                    <button
-                      className={r.pago ? 'btn-warning' : 'btn-success'}
-                      disabled={togglingId === r.id}
-                      onClick={() => handleTogglePago(r)}
-                      style={{ minWidth: '140px' }}
-                    >
-                      {togglingId === r.id
-                        ? 'Aguarde...'
-                        : r.pago
-                        ? 'Marcar Pendente'
-                        : 'Marcar Recebido'}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {receivables.length === 0 && (
-                <tr className="empty-row">
-                  <td colSpan={6}>Nenhuma venda registrada ainda.</td>
-                </tr>
+        <>
+          <div className="filter-bar" style={{ borderRadius: 0, borderTop: 'none' }}>
+            <div className="filter-search-wrap">
+              <span className="filter-search-icon">🔍</span>
+              <input
+                className="filter-search"
+                type="text"
+                placeholder="Buscar por descrição..."
+                value={searchReceber}
+                onChange={e => setSearchReceber(e.target.value)}
+              />
+              {searchReceber && (
+                <button className="filter-clear-btn" onClick={() => setSearchReceber('')} title="Limpar">✕</button>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <select
+              className="filter-select"
+              value={statusReceber}
+              onChange={e => setStatusReceber(e.target.value as any)}
+            >
+              <option value="all">Todos os status</option>
+              <option value="paid">Recebido</option>
+              <option value="pending">A Receber</option>
+            </select>
+            <span className="filter-count">{filteredReceivables.length} resultado{filteredReceivables.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: '0 0 var(--radius-md) var(--radius-md)', borderTop: 'none' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Descrição</th>
+                  <th>Valor</th>
+                  <th>Vencimento</th>
+                  <th>Status</th>
+                  <th>Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredReceivables.map(r => (
+                  <tr key={r.id}>
+                    <td>{r.id}</td>
+                    <td>{r.descricao}</td>
+                    <td>R$ {r.valor.toFixed(2)}</td>
+                    <td>{new Date(r.data_vencimento).toLocaleDateString('pt-BR')}</td>
+                    <td>
+                      {r.pago ? (
+                        <span className="status-active">✅ Recebido</span>
+                      ) : (
+                        <span className="status-pending">⏳ A Receber</span>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        className={r.pago ? 'btn-warning' : 'btn-success'}
+                        disabled={togglingId === r.id}
+                        onClick={() => handleTogglePago(r)}
+                        style={{ minWidth: '140px' }}
+                      >
+                        {togglingId === r.id
+                          ? 'Aguarde...'
+                          : r.pago
+                          ? 'Marcar Pendente'
+                          : 'Marcar Recebido'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredReceivables.length === 0 && (
+                  <tr className="empty-row">
+                    <td colSpan={6}>Nenhum registro encontrado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* Contas a Pagar */}
       {activeTab === 'pagar' && (
-        <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: '0 0 var(--radius-md) var(--radius-md)', borderTop: 'none' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Descrição</th>
-                <th>Valor</th>
-                <th>Vencimento</th>
-                <th>Cadastro</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payables.map(p => (
-                <tr key={p.id}>
-                  <td>{p.id}</td>
-                  <td>{p.descricao}</td>
-                  <td>R$ {p.valor.toFixed(2)}</td>
-                  <td>{new Date(p.data_vencimento).toLocaleDateString('pt-BR')}</td>
-                  <td>{new Date(p.data_cadastro).toLocaleDateString('pt-BR')}</td>
-                  <td>
-                    <div className="flex-row" style={{ gap: '8px' }}>
-                      <button className="btn-warning" onClick={() => navigate(`/finance/edit/${p.id}`)}>
-                        Editar
-                      </button>
-                      <button className="btn-danger" onClick={() => handleDeletePayable(p.id)}>
-                        Excluir
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {payables.length === 0 && (
-                <tr className="empty-row">
-                  <td colSpan={6}>Nenhuma despesa cadastrada.</td>
-                </tr>
+        <>
+          <div className="filter-bar" style={{ borderRadius: 0, borderTop: 'none' }}>
+            <div className="filter-search-wrap">
+              <span className="filter-search-icon">🔍</span>
+              <input
+                className="filter-search"
+                type="text"
+                placeholder="Buscar por descrição..."
+                value={searchPagar}
+                onChange={e => setSearchPagar(e.target.value)}
+              />
+              {searchPagar && (
+                <button className="filter-clear-btn" onClick={() => setSearchPagar('')} title="Limpar">✕</button>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <span className="filter-count">{filteredPayables.length} resultado{filteredPayables.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden', borderRadius: '0 0 var(--radius-md) var(--radius-md)', borderTop: 'none' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Descrição</th>
+                  <th>Valor</th>
+                  <th>Vencimento</th>
+                  <th>Cadastro</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPayables.map(p => (
+                  <tr key={p.id}>
+                    <td>{p.id}</td>
+                    <td>{p.descricao}</td>
+                    <td>R$ {p.valor.toFixed(2)}</td>
+                    <td>{new Date(p.data_vencimento).toLocaleDateString('pt-BR')}</td>
+                    <td>{new Date(p.data_cadastro).toLocaleDateString('pt-BR')}</td>
+                    <td>
+                      <div className="flex-row" style={{ gap: '8px' }}>
+                        <button className="btn-warning" onClick={() => navigate(`/finance/edit/${p.id}`)}>
+                          Editar
+                        </button>
+                        <button className="btn-danger" onClick={() => handleDeletePayable(p.id)}>
+                          Excluir
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredPayables.length === 0 && (
+                  <tr className="empty-row">
+                    <td colSpan={6}>Nenhuma despesa encontrada.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

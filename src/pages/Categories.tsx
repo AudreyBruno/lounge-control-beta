@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Categoria } from '../types/database';
 import { categoryService } from '../services/categoryService';
@@ -8,6 +8,8 @@ export function Categories() {
   const [categories, setCategories] = useState<Categoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   useEffect(() => {
     loadCategories();
@@ -34,6 +36,17 @@ export function Categories() {
     }
   };
 
+  const filtered = useMemo(() => {
+    return categories.filter(cat => {
+      const matchSearch = !search || cat.nome.toLowerCase().includes(search.toLowerCase());
+      const matchStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'active' && cat.status) ||
+        (statusFilter === 'inactive' && !cat.status);
+      return matchSearch && matchStatus;
+    });
+  }, [categories, search, statusFilter]);
+
   if (loading && categories.length === 0) return <p>Loading categories...</p>;
 
   return (
@@ -47,6 +60,33 @@ export function Categories() {
 
       {error && <div className="alert-error">{error}</div>}
 
+      {/* Filtros */}
+      <div className="filter-bar">
+        <div className="filter-search-wrap">
+          <span className="filter-search-icon">🔍</span>
+          <input
+            className="filter-search"
+            type="text"
+            placeholder="Buscar por nome..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="filter-clear-btn" onClick={() => setSearch('')} title="Limpar busca">✕</button>
+          )}
+        </div>
+        <select
+          className="filter-select"
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value as any)}
+        >
+          <option value="all">Todos os status</option>
+          <option value="active">Ativos</option>
+          <option value="inactive">Inativos</option>
+        </select>
+        <span className="filter-count">{filtered.length} resultado{filtered.length !== 1 ? 's' : ''}</span>
+      </div>
+
       <table className="data-table">
         <thead>
           <tr>
@@ -57,7 +97,7 @@ export function Categories() {
           </tr>
         </thead>
         <tbody>
-          {categories.map(cat => (
+          {filtered.map(cat => (
             <tr key={cat.id}>
               <td>{cat.id}</td>
               <td>{cat.nome}</td>
@@ -74,9 +114,9 @@ export function Categories() {
               </td>
             </tr>
           ))}
-          {categories.length === 0 && (
+          {filtered.length === 0 && (
             <tr className="empty-row">
-              <td colSpan={4}>Nenhuma categoria cadastrada.</td>
+              <td colSpan={4}>Nenhuma categoria encontrada.</td>
             </tr>
           )}
         </tbody>

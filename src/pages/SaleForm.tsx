@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { clientService } from '../services/clientService';
 import { productService, ProdutoWithDetails } from '../services/productService';
 import { saleService } from '../services/saleService';
@@ -11,6 +11,8 @@ interface CartItem extends ProdutoWithDetails {
 
 export function SaleForm() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const presetClientId = Number(searchParams.get('clientId')) || 0;
   const [clients, setClients] = useState<Cliente[]>([]);
   const [products, setProducts] = useState<ProdutoWithDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,8 +27,32 @@ export function SaleForm() {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
 
+  // Client combobox state
+  const [clientSearch, setClientSearch] = useState('');
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const clientRef = useRef<HTMLDivElement>(null);
+
+  // Product combobox state
+  const [productSearch, setProductSearch] = useState('');
+  const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+  const productRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (clientRef.current && !clientRef.current.contains(e.target as Node)) {
+        setClientDropdownOpen(false);
+      }
+      if (productRef.current && !productRef.current.contains(e.target as Node)) {
+        setProductDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
   const loadData = async () => {
@@ -36,13 +62,58 @@ export function SaleForm() {
         clientService.list(),
         productService.listFull()
       ]);
-      setClients(cliData.filter(c => c.status));
+      const activeClients = cliData.filter(c => c.status);
+      setClients(activeClients);
       setProducts(prodData);
+
+      // Pre-select client if clientId was passed via URL
+      if (presetClientId) {
+        const preset = activeClients.find(c => c.id === presetClientId);
+        if (preset) {
+          setSelectedClient(preset.id);
+          setClientSearch(preset.nome + (preset.numero ? ` (${preset.numero})` : ''));
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Error loading data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Filtered suggestions
+  const filteredClients = useMemo(() => {
+    const q = clientSearch.toLowerCase();
+    if (!q) return clients.slice(0, 10);
+    return clients.filter(
+      c => c.nome.toLowerCase().includes(q) || (c.numero || '').toLowerCase().includes(q)
+    ).slice(0, 10);
+  }, [clients, clientSearch]);
+
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.toLowerCase();
+    if (!q) return products.slice(0, 10);
+    return products.filter(
+      p =>
+        p.descricao.toLowerCase().includes(q) ||
+        (p.categoria_nome || '').toLowerCase().includes(q)
+    ).slice(0, 10);
+  }, [products, productSearch]);
+
+  // Derived labels for selected items
+  const selectedClientObj = clients.find(c => c.id === selectedClient);
+  const selectedProductObj = products.find(p => p.id === selectedProduct);
+
+  const handleSelectClient = (c: Cliente) => {
+    setSelectedClient(c.id);
+    setClientSearch(c.nome + (c.numero ? ` (${c.numero})` : ''));
+    setClientDropdownOpen(false);
+  };
+
+  const handleSelectProduct = (p: ProdutoWithDetails) => {
+    setSelectedProduct(p.id);
+    setProductSearch(`${p.descricao} — R$ ${p.valor.toFixed(2)}`);
+    setProductDropdownOpen(false);
   };
 
   const handleAddToCart = () => {
@@ -63,6 +134,7 @@ export function SaleForm() {
     }
 
     setSelectedProduct(0);
+    setProductSearch('');
     setQuantity(1);
   };
 
@@ -100,6 +172,7 @@ export function SaleForm() {
       
       setCart([]);
       setSelectedClient(0);
+      setClientSearch('');
       setValorPago('');
       
       await loadData();
@@ -127,36 +200,110 @@ export function SaleForm() {
       <div className="pdv-layout">
         {/* Lado Esquerdo */}
         <div className="card-pdv">
+
+          {/* ── BUSCA DE CLIENTE ── */}
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-secondary)' }}>Cliente</label>
-            <select 
-              value={selectedClient} 
-              onChange={(e) => setSelectedClient(Number(e.target.value))}
-              style={{ width: '100%' }}
-            >
-              <option value={0} disabled>Selecione um cliente</option>
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.nome} {c.numero ? `(${c.numero})` : ''}</option>
-              ))}
-            </select>
+            <label className="pdv-label">Cliente</label>
+            <div className="pdv-combobox" ref={clientRef}>
+              <div className="pdv-combobox-input-wrap">
+                <span className="pdv-combobox-icon">🔍</span>
+                <input
+                  className="pdv-combobox-input"
+                  type="text"
+                  placeholder="Buscar cliente pelo nome ou contato..."
+                  value={clientSearch}
+                  onChange={e => {
+                    setClientSearch(e.target.value);
+                    setSelectedClient(0);
+                    setClientDropdownOpen(true);
+                  }}
+                  onFocus={() => setClientDropdownOpen(true)}
+                />
+                {selectedClientObj && (
+                  <span className="pdv-combobox-badge">✓</span>
+                )}
+                {clientSearch && (
+                  <button
+                    className="pdv-combobox-clear"
+                    onClick={() => { setClientSearch(''); setSelectedClient(0); setClientDropdownOpen(false); }}
+                  >✕</button>
+                )}
+              </div>
+              {clientDropdownOpen && filteredClients.length > 0 && (
+                <ul className="pdv-combobox-list">
+                  {filteredClients.map(c => (
+                    <li
+                      key={c.id}
+                      className={`pdv-combobox-item${c.id === selectedClient ? ' selected' : ''}`}
+                      onMouseDown={() => handleSelectClient(c)}
+                    >
+                      <span className="pdv-combobox-item-name">{c.nome}</span>
+                      {c.numero && <span className="pdv-combobox-item-sub">{c.numero}</span>}
+                      {c.permite_venda_prazo && <span className="pdv-combobox-tag">Fiado</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {clientDropdownOpen && clientSearch && filteredClients.length === 0 && (
+                <div className="pdv-combobox-empty">Nenhum cliente encontrado</div>
+              )}
+            </div>
           </div>
 
           <hr style={{ border: 'none', borderTop: '1px solid var(--surface-border)' }} />
 
+          {/* ── BUSCA DE PRODUTO ── */}
           <div style={{ marginTop: '20px' }}>
-            <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-secondary)' }}>Adicionar Produto</label>
-            <select 
-              value={selectedProduct} 
-              onChange={(e) => setSelectedProduct(Number(e.target.value))}
-              style={{ width: '100%', marginBottom: '12px' }}
-            >
-              <option value={0} disabled>Selecione um produto</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.descricao} - R$ {p.valor.toFixed(2)} (Estoque: {p.estoque})
-                </option>
-              ))}
-            </select>
+            <label className="pdv-label">Adicionar Produto</label>
+            <div className="pdv-combobox" ref={productRef} style={{ marginBottom: '12px' }}>
+              <div className="pdv-combobox-input-wrap">
+                <span className="pdv-combobox-icon">🔍</span>
+                <input
+                  className="pdv-combobox-input"
+                  type="text"
+                  placeholder="Buscar produto por nome ou categoria..."
+                  value={productSearch}
+                  onChange={e => {
+                    setProductSearch(e.target.value);
+                    setSelectedProduct(0);
+                    setProductDropdownOpen(true);
+                  }}
+                  onFocus={() => setProductDropdownOpen(true)}
+                />
+                {selectedProductObj && (
+                  <span className="pdv-combobox-badge">✓</span>
+                )}
+                {productSearch && (
+                  <button
+                    className="pdv-combobox-clear"
+                    onClick={() => { setProductSearch(''); setSelectedProduct(0); setProductDropdownOpen(false); }}
+                  >✕</button>
+                )}
+              </div>
+              {productDropdownOpen && filteredProducts.length > 0 && (
+                <ul className="pdv-combobox-list">
+                  {filteredProducts.map(p => (
+                    <li
+                      key={p.id}
+                      className={`pdv-combobox-item${p.id === selectedProduct ? ' selected' : ''}`}
+                      onMouseDown={() => handleSelectProduct(p)}
+                    >
+                      <span className="pdv-combobox-item-name">{p.descricao}</span>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        {p.categoria_nome && <span className="pdv-combobox-item-sub">{p.categoria_nome}</span>}
+                        <span className="pdv-combobox-tag pdv-combobox-tag--price">R$ {p.valor.toFixed(2)}</span>
+                        <span className={`pdv-combobox-tag${p.estoque <= 0 ? ' pdv-combobox-tag--danger' : ''}`}>
+                          Estoque: {p.estoque}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {productDropdownOpen && productSearch && filteredProducts.length === 0 && (
+                <div className="pdv-combobox-empty">Nenhum produto encontrado</div>
+              )}
+            </div>
 
             <div className="flex-row">
               <input 
@@ -236,3 +383,4 @@ export function SaleForm() {
     </div>
   );
 }
+
